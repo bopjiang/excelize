@@ -86,6 +86,9 @@ func (f *File) AddPicture(sheet, cell, picture, format string) error {
 	}
 	readFile, _ := os.Open(picture)
 	image, _, err := image.DecodeConfig(readFile)
+	if err != nil{
+		return err
+	}
 	_, file := filepath.Split(picture)
 	formatSet := parseFormatPictureSet(format)
 	// Read sheet data.
@@ -109,8 +112,8 @@ func (f *File) AddPicture(sheet, cell, picture, format string) error {
 	return err
 }
 
-// AddPictureFromStream adds picture from io.Reader
-func (f *File) AddPictureFromStream(sheet, cell string, pictureReader io.Reader, refName, format string) error {
+// AddPictureFromReader adds picture from io.Reader
+func (f *File) AddPictureFromReader(sheet, cell string, pictureReader io.Reader, refName, format string) error {
 	var err error
 	var drawingHyperlinkRID int
 	var hyperlinkType string
@@ -123,6 +126,7 @@ func (f *File) AddPictureFromStream(sheet, cell string, pictureReader io.Reader,
 	var buf bytes.Buffer
 	pictureReader2 := io.TeeReader(pictureReader, &buf)
 	image, _, err := image.DecodeConfig(pictureReader2)
+	ioutil.ReadAll(pictureReader2)
 
 	_, file := filepath.Split(refName)
 	formatSet := parseFormatPictureSet(format)
