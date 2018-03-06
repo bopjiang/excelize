@@ -7,6 +7,7 @@ import (
 	"errors"
 	"image"
 	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -85,6 +86,9 @@ func (f *File) AddPicture(sheet, cell, picture, format string) error {
 	}
 	readFile, _ := os.Open(picture)
 	image, _, err := image.DecodeConfig(readFile)
+	if err != nil{
+		return err
+	}
 	_, file := filepath.Split(picture)
 	formatSet := parseFormatPictureSet(format)
 	// Read sheet data.
@@ -104,6 +108,45 @@ func (f *File) AddPicture(sheet, cell, picture, format string) error {
 	}
 	f.addDrawingPicture(sheet, drawingXML, cell, file, image.Width, image.Height, drawingRID, drawingHyperlinkRID, formatSet)
 	f.addMedia(picture, ext)
+	f.addContentTypePart(drawingID, "drawings")
+	return err
+}
+
+// AddPictureFromReader adds picture from io.Reader
+func (f *File) AddPictureFromReader(sheet, cell string, pictureReader io.Reader, refName, format string) error {
+	var err error
+	var drawingHyperlinkRID int
+	var hyperlinkType string
+	
+	ext, ok := supportImageTypes[path.Ext(refName)]
+	if !ok {
+		return errors.New("Unsupported image extension")
+	}
+
+	var buf bytes.Buffer
+	pictureReader2 := io.TeeReader(pictureReader, &buf)
+	image, _, err := image.DecodeConfig(pictureReader2)
+	ioutil.ReadAll(pictureReader2)
+
+	_, file := filepath.Split(refName)
+	formatSet := parseFormatPictureSet(format)
+	// Read sheet data.
+	xlsx := f.workSheetReader(sheet)
+	// Add first picture for given sheet, create xl/drawings/ and xl/drawings/_rels/ folder.
+	drawingID := f.countDrawings() + 1
+	pictureID := f.countMedia() + 1
+	drawingXML := "xl/drawings/drawing" + strconv.Itoa(drawingID) + ".xml"
+	drawingID, drawingXML = f.prepareDrawing(xlsx, drawingID, sheet, drawingXML)
+	drawingRID := f.addDrawingRelationships(drawingID, SourceRelationshipImage, "../media/image"+strconv.Itoa(pictureID)+ext, hyperlinkType)
+	// Add picture with hyperlink.
+	if formatSet.Hyperlink != "" && formatSet.HyperlinkType != "" {
+		if formatSet.HyperlinkType == "External" {
+			hyperlinkType = formatSet.HyperlinkType
+		}
+		drawingHyperlinkRID = f.addDrawingRelationships(drawingID, SourceRelationshipHyperLink, formatSet.Hyperlink, hyperlinkType)
+	}
+	f.addDrawingPicture(sheet, drawingXML, cell, file, image.Width, image.Height, drawingRID, drawingHyperlinkRID, formatSet)
+	f.addMedia2(&buf, ext)
 	f.addContentTypePart(drawingID, "drawings")
 	return err
 }
@@ -301,6 +344,13 @@ func (f *File) countMedia() int {
 func (f *File) addMedia(file, ext string) {
 	count := f.countMedia()
 	dat, _ := ioutil.ReadFile(file)
+	media := "xl/media/image" + strconv.Itoa(count+1) + ext
+	f.XLSX[media] = string(dat)
+}
+
+func (f *File) addMedia2(r io.Reader, ext string) {
+	count := f.countMedia()
+	dat, _ := ioutil.ReadAll(r)
 	media := "xl/media/image" + strconv.Itoa(count+1) + ext
 	f.XLSX[media] = string(dat)
 }
