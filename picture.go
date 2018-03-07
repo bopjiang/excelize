@@ -126,8 +126,7 @@ func (f *File) AddPictureFromReader(sheet, cell string, pictureReader io.Reader,
 	var buf bytes.Buffer
 	pictureReader2 := io.TeeReader(pictureReader, &buf)
 	image, _, err := image.DecodeConfig(pictureReader2)
-	ioutil.ReadAll(pictureReader2)
-
+	
 	_, file := filepath.Split(refName)
 	formatSet := parseFormatPictureSet(format)
 	// Read sheet data.
@@ -146,7 +145,7 @@ func (f *File) AddPictureFromReader(sheet, cell string, pictureReader io.Reader,
 		drawingHyperlinkRID = f.addDrawingRelationships(drawingID, SourceRelationshipHyperLink, formatSet.Hyperlink, hyperlinkType)
 	}
 	f.addDrawingPicture(sheet, drawingXML, cell, file, image.Width, image.Height, drawingRID, drawingHyperlinkRID, formatSet)
-	f.addMedia2(&buf, ext)
+	f.addMedia2(io.MultiReader(&buf, pictureReader2), ext)
 	f.addContentTypePart(drawingID, "drawings")
 	return err
 }
